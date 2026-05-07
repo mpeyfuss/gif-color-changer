@@ -2,10 +2,11 @@
 Replace all pixels of one or more colors with other colors in a GIF.
 
 Usage:
-    python main.py input.gif output.gif --map "#FFFFFF=#FF0000" --map "#000000=#00FF00"
+    gifcc input.gif output.gif --map "#FFFFFF=#FF0000" --map "#000000=#00FF00"
 """
 
 import argparse
+
 import numpy as np
 from PIL import Image, ImageSequence
 
@@ -46,7 +47,6 @@ def replace_colors(
     original_rgb = pixels[:, :, :3].astype(np.int16)
     alpha_mask = pixels[:, :, 3] > 0
     changed_mask = np.zeros(alpha_mask.shape, dtype=bool)
-
     changed_counts = [0] * len(color_mappings)
 
     for index, (from_rgb, to_rgb) in enumerate(color_mappings):
@@ -129,7 +129,3 @@ def main():
         color_mappings,
         args.tolerance,
     )
-
-
-if __name__ == "__main__":
-    main()
