@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 from PIL import Image, ImageSequence
@@ -6,6 +7,9 @@ from PIL import Image, ImageSequence
 
 RgbColor = tuple[int, int, int]
 ColorMapping = tuple[RgbColor, RgbColor]
+Palette = list[RgbColor]
+DistanceMode = Literal["rgb", "weighted-rgb"]
+RGB_DISTANCE_WEIGHTS = np.array((0.2126, 0.7152, 0.0722), dtype=np.float32)
 
 
 @dataclass(frozen=True)
@@ -20,7 +24,11 @@ def hex_to_rgb(hex_color: str) -> RgbColor:
     hex_color = hex_color.strip().lstrip("#")
     if len(hex_color) != 6:
         raise ValueError(f"Expected a 6-digit hex color, got: {hex_color!r}")
-    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+
+    try:
+        return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        raise ValueError(f"Expected a 6-digit hex color, got: {hex_color!r}") from None
 
 
 def parse_color_mapping(raw_mapping: str) -> ColorMapping:
@@ -39,33 +47,128 @@ def parse_color_mapping(raw_mapping: str) -> ColorMapping:
     return hex_to_rgb(from_color), hex_to_rgb(to_color)
 
 
+def parse_palette(raw_palette: str) -> Palette:
+    colors = [color.strip() for color in raw_palette.split(",")]
+    if not colors or any(not color for color in colors):
+        raise ValueError(f"Expected comma-separated hex colors, got: {raw_palette!r}")
+
+    return [hex_to_rgb(color) for color in colors]
+
+
+def validate_palette_mapping(source_palette: Palette, target_palette: Palette):
+    if not source_palette:
+        raise ValueError("Expected source palette to contain at least one color")
+
+    if not target_palette:
+        raise ValueError("Expected target palette to contain at least one color")
+
+    if len(source_palette) != len(target_palette):
+        raise ValueError(
+            "Expected source and target palettes to contain the same number of colors"
+        )
+
+
+def validate_distance_mode(distance: str):
+    if distance not in ("rgb", "weighted-rgb"):
+        raise ValueError("Expected distance to be 'rgb' or 'weighted-rgb'")
+
+
 def replace_colors(
-    frame: Image.Image, color_mappings: list[ColorMapping], tolerance: int
+    frame: Image.Image,
+    color_mappings: list[ColorMapping],
+    tolerance: int,
+    softness: int = 0,
 ):
-    """Replace pixels matching source colors with their paired target colors."""
+    """Replace RGB colors while preserving the original alpha channel."""
     frame = frame.convert("RGBA")
     pixels = np.array(frame)  # pixels[y][x] = [R,G,B,A]
     original_rgb = pixels[:, :, :3].astype(np.int16)
-    alpha_mask = pixels[:, :, 3] > 0
-    changed_mask = np.zeros(alpha_mask.shape, dtype=bool)
+    changed_mask = np.zeros(pixels.shape[:2], dtype=bool)
     changed_counts = [0] * len(color_mappings)
 
     for index, (from_rgb, to_rgb) in enumerate(color_mappings):
         from_rgb_array = np.array(from_rgb, dtype=np.int16)
-        color_mask = np.all(np.abs(original_rgb - from_rgb_array) <= tolerance, axis=2)
-        mask = alpha_mask & ~changed_mask & color_mask
+        channel_distances = np.abs(original_rgb - from_rgb_array)
+        color_distance = np.max(channel_distances, axis=2)
+        color_mask = color_distance <= tolerance
+        mask = ~changed_mask & color_mask
 
-        pixels[mask, :3] = to_rgb
+        if softness > 0 and tolerance > 0:
+            soft_start = max(tolerance - softness, 0)
+            blend_weights = np.ones(color_distance.shape, dtype=np.float32)
+            soft_mask = mask & (color_distance > soft_start)
+
+            if np.any(soft_mask):
+                soft_range = tolerance - soft_start
+                blend_weights[soft_mask] = (
+                    tolerance - color_distance[soft_mask]
+                ) / soft_range
+
+            to_rgb_array = np.array(to_rgb, dtype=np.float32)
+            source_rgb = original_rgb[mask].astype(np.float32)
+            weights = blend_weights[mask, np.newaxis]
+            pixels[mask, :3] = np.rint(
+                source_rgb + ((to_rgb_array - source_rgb) * weights)
+            ).astype(np.uint8)
+        else:
+            pixels[mask, :3] = to_rgb
+
         changed_mask |= mask
         changed_counts[index] = int(np.count_nonzero(mask))
 
     return Image.fromarray(pixels, mode="RGBA"), changed_counts
 
 
+def rewrite_palette(
+    frame: Image.Image,
+    source_palette: Palette,
+    target_palette: Palette,
+    distance: DistanceMode = "rgb",
+):
+    """Rewrite RGB colors while preserving the original alpha channel."""
+    validate_palette_mapping(source_palette, target_palette)
+    validate_distance_mode(distance)
+
+    frame = frame.convert("RGBA")
+    pixels = np.array(frame)  # pixels[y][x] = [R,G,B,A]
+    target_palette_array = np.array(target_palette, dtype=np.uint8)
+
+    if distance == "weighted-rgb":
+        original_rgb = pixels[:, :, :3].astype(np.float32)
+        source_palette_array = np.array(source_palette, dtype=np.float32)
+        nearest_distances = np.full(pixels.shape[:2], np.inf, dtype=np.float32)
+    else:
+        original_rgb = pixels[:, :, :3].astype(np.int32)
+        source_palette_array = np.array(source_palette, dtype=np.int32)
+        nearest_distances = np.full(pixels.shape[:2], np.iinfo(np.int32).max)
+
+    nearest_indexes = np.zeros(pixels.shape[:2], dtype=np.intp)
+
+    for index, source_rgb in enumerate(source_palette_array):
+        delta = original_rgb - source_rgb
+        if distance == "weighted-rgb":
+            distances = np.sum((delta * delta) * RGB_DISTANCE_WEIGHTS, axis=2)
+        else:
+            distances = np.sum(delta * delta, axis=2)
+        closer_mask = distances < nearest_distances
+        nearest_distances[closer_mask] = distances[closer_mask]
+        nearest_indexes[closer_mask] = index
+
+    assignment_counts = [0] * len(source_palette)
+
+    for index, target_rgb in enumerate(target_palette_array):
+        mask = nearest_indexes == index
+        pixels[mask, :3] = target_rgb
+        assignment_counts[index] = int(np.count_nonzero(mask))
+
+    return Image.fromarray(pixels, mode="RGBA"), assignment_counts
+
+
 def recolor_gif(
     image: Image.Image,
     color_mappings: list[ColorMapping],
     tolerance: int,
+    softness: int = 0,
 ):
     frames = [frame.copy() for frame in ImageSequence.Iterator(image)]
     durations = [frame.info.get("duration", 100) for frame in frames]
@@ -74,7 +177,9 @@ def recolor_gif(
     total_changed_counts = [0] * len(color_mappings)
 
     for frame in frames:
-        new_frame, changed_counts = replace_colors(frame, color_mappings, tolerance)
+        new_frame, changed_counts = replace_colors(
+            frame, color_mappings, tolerance, softness
+        )
         new_frames.append(new_frame)
 
         for index, changed_count in enumerate(changed_counts):
@@ -85,4 +190,36 @@ def recolor_gif(
         durations=durations,
         loop=loop,
         changed_counts=total_changed_counts,
+    )
+
+
+def rewrite_gif_palette(
+    image: Image.Image,
+    source_palette: Palette,
+    target_palette: Palette,
+    distance: DistanceMode = "rgb",
+):
+    validate_palette_mapping(source_palette, target_palette)
+    validate_distance_mode(distance)
+
+    frames = [frame.copy() for frame in ImageSequence.Iterator(image)]
+    durations = [frame.info.get("duration", 100) for frame in frames]
+    loop = image.info.get("loop", 0)
+    new_frames = []
+    total_assignment_counts = [0] * len(source_palette)
+
+    for frame in frames:
+        new_frame, assignment_counts = rewrite_palette(
+            frame, source_palette, target_palette, distance
+        )
+        new_frames.append(new_frame)
+
+        for index, assignment_count in enumerate(assignment_counts):
+            total_assignment_counts[index] += assignment_count
+
+    return RecoloredGif(
+        frames=new_frames,
+        durations=durations,
+        loop=loop,
+        changed_counts=total_assignment_counts,
     )

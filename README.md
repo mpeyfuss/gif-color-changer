@@ -42,6 +42,8 @@ replace white with red
 
 You can pass as many mappings as you need. They run in order, and a pixel is only changed once.
 
+Alpha is not part of color matching. The tool only changes RGB values and preserves each pixel's original alpha value, including fully transparent pixels.
+
 ## Tolerance
 
 GIF colors are often not exactly what they look like, especially after palette conversion or compression. Use `--tolerance` to match colors that are close to the source color.
@@ -52,7 +54,45 @@ gifcc input.gif output.gif \
   --tolerance 20
 ```
 
-The default tolerance is `10`.
+The default tolerance is `50`.
+
+## Softness
+
+Use `--softness` to blend pixels near the edge of the tolerance range instead of fully replacing every matched pixel.
+
+```bash
+gifcc input.gif output.gif \
+  --map "#FFFFFF=#FF0000" \
+  --tolerance 20 \
+  --softness 8
+```
+
+With `--tolerance 20 --softness 8`, pixels within distance `12` of the source color are fully replaced. Pixels between `12` and `20` are blended proportionally from their original color toward the replacement color.
+
+The default softness is `25`. Use `--softness 0` for hard replacement.
+
+## Palette Rewrite Mode
+
+Palette mode rewrites every pixel by mapping its RGB value to the nearest color in a source palette, then forcing it to the color at the same position in a target palette. Alpha values are preserved unchanged.
+
+```bash
+gifcc input.gif output.gif \
+  --source-palette "#000000,#808080,#FFFFFF" \
+  --target-palette "#1D3557,#E63946,#F1FAEE"
+```
+
+Both palettes must contain the same number of colors. The source and target palettes are matched by position, so the first source color maps to the first target color, the second source color maps to the second target color, and so on.
+
+Palette mode cannot be combined with `--map`, `--tolerance`, or `--softness`.
+
+By default, palette mode uses squared RGB distance. Use `--distance weighted-rgb` to weight channel differences by perceptual luminance:
+
+```bash
+gifcc input.gif output.gif \
+  --source-palette "#000000,#808080,#FFFFFF" \
+  --target-palette "#1D3557,#E63946,#F1FAEE" \
+  --distance weighted-rgb
+```
 
 ## Output
 
@@ -60,6 +100,12 @@ The script prints how many pixels were changed for each mapping:
 
 ```text
 (255, 255, 255) -> (255, 0, 0): changed 1234 pixel(s)
+```
+
+In palette mode, it prints how many pixels were assigned to each source palette bucket:
+
+```text
+(0, 0, 0) -> (29, 53, 87): assigned 1234 pixel(s)
 ```
 
 If a mapping says it changed `0` pixels, the source color probably does not exist in the GIF at that tolerance.
