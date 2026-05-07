@@ -78,6 +78,26 @@ Set up the repo:
 uv sync
 ```
 
+Run tests:
+
+```bash
+uv run pytest
+```
+
+Run tests against a specific Python version:
+
+```bash
+uv run --python 3.11 pytest
+```
+
+Or use the Makefile:
+
+```bash
+make test
+make test-all
+make test-3.11
+```
+
 Run the command without installing it as a tool:
 
 ```bash

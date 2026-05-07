@@ -1,12 +1,17 @@
 [project]
 name = "gif-color-changer"
-version = "0.1.2"
+version = "0.2.0"
 description = "Replace colors across every frame of a GIF from the command line."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=2.4.4",
     "pillow>=12.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
 ]
 
 [project.urls]
@@ -19,3 +24,6 @@ gifcc = "gif_color_changer.cli:main"
 [build-system]
 requires = ["uv_build>=0.11.6,<0.12"]
 build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
