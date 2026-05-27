@@ -94,6 +94,25 @@ gifcc input.gif output.gif \
   --distance weighted-rgb
 ```
 
+### Edge cleanup
+
+Because each pixel is classified to its nearest palette color independently, antialiased or dithered pixels along an edge can land in a different bucket than the region around them, leaving isolated speckles of an unexpected color.
+
+Use `--cleanup` to run one or more cleanup passes that reassign such pixels to the palette bucket that dominates their neighborhood:
+
+```bash
+gifcc input.gif output.gif \
+  --source-palette "#000000,#808080,#FFFFFF" \
+  --target-palette "#1D3557,#E63946,#F1FAEE" \
+  --cleanup 2
+```
+
+Each pass reassigns a pixel whenever some *other* bucket occupies more of its 8-neighborhood than its own bucket does, snapping it to whichever neighbor color surrounds it most. This absorbs isolated speckles and the thin intermediate-color bands that form along antialiased edges, while pixels inside a solid region or on a real boundary are left intact, because their own side still dominates their neighborhood. More passes dissolve thicker bands but can also erode thin, legitimate detail.
+
+Transparency is treated as just another region, so a pixel takes on the color *and* opacity of whatever surrounds it most. A stray opaque pixel sitting in transparent space becomes transparent, and a transparent hole inside a solid region fills in with that region's color. This also means a visible pixel bordering transparency is never recolored toward the hidden color of the transparent area around it.
+
+`--cleanup` defaults to `0` (off) and is only valid in palette mode.
+
 ## Output
 
 The script prints how many pixels were changed for each mapping:

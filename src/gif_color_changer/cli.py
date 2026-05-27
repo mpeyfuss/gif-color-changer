@@ -50,6 +50,16 @@ def main():
         ),
     )
     parser.add_argument(
+        "--cleanup",
+        type=int,
+        help=(
+            "Palette mode only: number of edge-cleanup passes. Each pass "
+            "reassigns isolated pixels to the palette bucket that dominates "
+            "their neighborhood, while leaving real edges intact. "
+            "Default: 0 (off)."
+        ),
+    )
+    parser.add_argument(
         "--tolerance",
         type=int,
         help=(
@@ -86,6 +96,10 @@ def main():
         if args.softness is not None:
             parser.error("--softness cannot be used with palette mode")
 
+        cleanup = 0 if args.cleanup is None else args.cleanup
+        if cleanup < 0:
+            parser.error("--cleanup must be 0 or greater")
+
         try:
             source_palette = parse_palette(args.source_palette)
             target_palette = parse_palette(args.target_palette)
@@ -99,7 +113,7 @@ def main():
 
         with Image.open(args.input) as image:
             recolored = rewrite_gif_palette(
-                image, source_palette, target_palette, distance
+                image, source_palette, target_palette, distance, cleanup
             )
 
         for (from_rgb, to_rgb), assigned_count in zip(
@@ -114,6 +128,8 @@ def main():
             parser.error("--softness must be 0 or greater")
         if args.distance is not None:
             parser.error("--distance can only be used with palette mode")
+        if args.cleanup is not None:
+            parser.error("--cleanup can only be used with palette mode")
 
         try:
             color_mappings = [

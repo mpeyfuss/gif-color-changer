@@ -119,11 +119,65 @@ def replace_colors(
     return Image.fromarray(pixels, mode="RGBA"), changed_counts
 
 
+def _neighbor_counts(mask: np.ndarray) -> np.ndarray:
+    """Count, per pixel, how many of its 8 neighbors are set in ``mask``.
+
+    Pixels outside the image are treated as unset, so border pixels simply have
+    fewer neighbors available.
+    """
+    padded = np.pad(mask, 1)
+    return (
+        padded[:-2, :-2] + padded[:-2, 1:-1] + padded[:-2, 2:]
+        + padded[1:-1, :-2] + padded[1:-1, 2:]
+        + padded[2:, :-2] + padded[2:, 1:-1] + padded[2:, 2:]
+    )
+
+
+def cleanup_edges(labels: np.ndarray, num_labels: int, passes: int) -> np.ndarray:
+    """Smooth a label map by reassigning pixels to the label that surrounds them
+    more than their own.
+
+    Each pass reassigns a pixel whenever some *other* label occupies more of its
+    8-neighborhood than the pixel's own label does, snapping it to whichever
+    neighbor dominates. This absorbs isolated speckles and the thin
+    intermediate bands that form along antialiased edges (their own label has
+    few neighbors), while pixels inside a solid region or along a real boundary
+    keep their label, because their own side still dominates their
+    neighborhood. Ties between competing labels resolve to the lower index.
+    """
+    if passes <= 0:
+        return labels
+
+    labels = labels.copy()
+    height, width = labels.shape
+    for _ in range(passes):
+        counts = np.zeros((num_labels, height, width), dtype=np.int16)
+        for index in range(num_labels):
+            counts[index] = _neighbor_counts((labels == index).astype(np.int16))
+
+        # How many neighbors share the pixel's own label.
+        self_count = np.take_along_axis(counts, labels[np.newaxis], axis=0)[0]
+
+        # The strongest competing label, ignoring the pixel's own.
+        other_counts = counts.copy()
+        np.put_along_axis(other_counts, labels[np.newaxis], -1, axis=0)
+        other_label = np.argmax(other_counts, axis=0)
+        other_count = np.max(other_counts, axis=0)
+
+        flip = other_count > self_count
+        if not np.any(flip):
+            break
+        labels[flip] = other_label[flip].astype(labels.dtype)
+
+    return labels
+
+
 def rewrite_palette(
     frame: Image.Image,
     source_palette: Palette,
     target_palette: Palette,
     distance: DistanceMode = "rgb",
+    cleanup: int = 0,
 ):
     """Rewrite RGB colors while preserving the original alpha channel."""
     validate_palette_mapping(source_palette, target_palette)
@@ -154,10 +208,28 @@ def rewrite_palette(
         nearest_distances[closer_mask] = distances[closer_mask]
         nearest_indexes[closer_mask] = index
 
+    labels = nearest_indexes
+    if cleanup > 0:
+        # Treat "transparent" as an extra region so cleanup works on color and
+        # opacity together: a pixel adopts the color *and* alpha of whatever
+        # surrounds it most. Stray opaque pixels in transparent space become
+        # transparent, and transparent holes inside a region fill in. This also
+        # stops visible pixels from being recolored toward the hidden RGB of
+        # transparent neighbors, which now only ever vote for "transparent".
+        transparent_label = len(source_palette)
+        opaque = pixels[:, :, 3] > 0
+        labels = np.where(opaque, nearest_indexes, transparent_label)
+        labels = cleanup_edges(labels, len(source_palette) + 1, cleanup)
+
+        became_transparent = labels == transparent_label
+        pixels[became_transparent, 3] = 0
+        # Transparent pixels pulled into a region become fully opaque.
+        pixels[~opaque & ~became_transparent, 3] = 255
+
     assignment_counts = [0] * len(source_palette)
 
     for index, target_rgb in enumerate(target_palette_array):
-        mask = nearest_indexes == index
+        mask = labels == index
         pixels[mask, :3] = target_rgb
         assignment_counts[index] = int(np.count_nonzero(mask))
 
@@ -198,6 +270,7 @@ def rewrite_gif_palette(
     source_palette: Palette,
     target_palette: Palette,
     distance: DistanceMode = "rgb",
+    cleanup: int = 0,
 ):
     validate_palette_mapping(source_palette, target_palette)
     validate_distance_mode(distance)
@@ -210,7 +283,7 @@ def rewrite_gif_palette(
 
     for frame in frames:
         new_frame, assignment_counts = rewrite_palette(
-            frame, source_palette, target_palette, distance
+            frame, source_palette, target_palette, distance, cleanup
         )
         new_frames.append(new_frame)
 

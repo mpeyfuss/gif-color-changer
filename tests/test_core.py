@@ -2,6 +2,7 @@ import pytest
 from PIL import Image
 
 from gif_color_changer.core import (
+    cleanup_edges,
     parse_color_mapping,
     parse_palette,
     recolor_gif,
@@ -164,6 +165,112 @@ def test_rewrite_palette_supports_weighted_rgb_distance():
     assert weighted_counts == [1, 0]
     assert list(rgb_recolored.getdata()) == [(0, 0, 255, 255)]
     assert list(weighted_recolored.getdata()) == [(255, 0, 0, 255)]
+
+
+def test_cleanup_edges_absorbs_isolated_speckle_into_neighbor_majority():
+    import numpy as np
+
+    labels = np.zeros((3, 3), dtype=np.intp)
+    labels[1, 1] = 1  # lone bucket-1 pixel surrounded by 8 bucket-0 neighbors
+
+    cleaned = cleanup_edges(labels, num_labels=2, passes=1)
+
+    assert cleaned[1, 1] == 0
+    assert np.all(cleaned == 0)
+
+
+def test_cleanup_edges_preserves_a_straight_edge():
+    import numpy as np
+
+    # Left half bucket 0, right half bucket 1. Each edge pixel's own side still
+    # dominates its neighborhood, so the boundary is left intact.
+    labels = np.zeros((4, 4), dtype=np.intp)
+    labels[:, 2:] = 1
+
+    cleaned = cleanup_edges(labels, num_labels=2, passes=3)
+
+    assert np.array_equal(cleaned, labels)
+
+
+def test_cleanup_edges_dissolves_a_thin_intermediate_band_along_an_edge():
+    import numpy as np
+
+    # A 1-pixel-wide bucket-2 band sits between a bucket-0 region (cols 0-1) and
+    # a bucket-1 region (cols 3-4) -- the antialiased-edge case. Every band
+    # pixel is outnumbered by the regions on either side, so the band dissolves
+    # into them and no bucket-2 pixel survives. The two regions are preserved.
+    labels = np.zeros((5, 5), dtype=np.intp)
+    labels[:, 2] = 2
+    labels[:, 3:] = 1
+
+    cleaned = cleanup_edges(labels, num_labels=3, passes=1)
+
+    assert not np.any(cleaned == 2)
+    assert np.all(cleaned[:, :2] == 0)
+    assert np.all(cleaned[:, 3:] == 1)
+
+
+def test_rewrite_palette_cleanup_erases_stray_opaque_pixel_into_transparency():
+    image = Image.new("RGBA", (3, 3))
+    pixels = [(0, 0, 128, 0)] * 9  # transparent background
+    pixels[4] = (0, 0, 128, 255)  # one stray opaque pixel
+    image.putdata(pixels)
+
+    source_palette = [(255, 255, 0), (0, 0, 128)]
+    target_palette = [(255, 255, 0), (0, 0, 128)]
+
+    recolored, _ = rewrite_palette(
+        image, source_palette, target_palette, cleanup=1
+    )
+
+    # Surrounded by transparency, the stray pixel takes on that transparency.
+    assert all(pixel[3] == 0 for pixel in recolored.getdata())
+
+
+def test_rewrite_palette_cleanup_fills_transparent_hole_inside_a_region():
+    image = Image.new("RGBA", (3, 3), (255, 255, 0, 255))  # solid opaque region
+    pixels = list(image.getdata())
+    pixels[4] = (0, 0, 128, 0)  # one transparent hole in the middle
+    image.putdata(pixels)
+
+    source_palette = [(255, 255, 0), (0, 0, 128)]
+    target_palette = [(255, 255, 0), (0, 0, 128)]
+
+    recolored, _ = rewrite_palette(
+        image, source_palette, target_palette, cleanup=1
+    )
+
+    # Surrounded by the region, the hole fills in with its color and opacity.
+    assert list(recolored.getdata()) == [(255, 255, 0, 255)] * 9
+
+
+def test_cleanup_edges_is_a_no_op_when_passes_is_zero():
+    import numpy as np
+
+    labels = np.zeros((3, 3), dtype=np.intp)
+    labels[1, 1] = 1
+
+    cleaned = cleanup_edges(labels, num_labels=2, passes=0)
+
+    assert np.array_equal(cleaned, labels)
+
+
+def test_rewrite_palette_cleanup_recolors_isolated_pixel_to_neighbor_color():
+    image = Image.new("RGBA", (3, 3), (0, 0, 0, 255))
+    pixels = list(image.getdata())
+    pixels[4] = (255, 255, 255, 255)  # lone white pixel in a field of black
+    image.putdata(pixels)
+
+    source_palette = [(0, 0, 0), (255, 255, 255)]
+    target_palette = [(10, 20, 30), (200, 210, 220)]
+
+    recolored, counts = rewrite_palette(
+        image, source_palette, target_palette, cleanup=1
+    )
+
+    # The lone white pixel is reassigned to the surrounding black bucket.
+    assert counts == [9, 0]
+    assert list(recolored.getdata()) == [(10, 20, 30, 255)] * 9
 
 
 def test_rewrite_gif_palette_returns_frames_metadata_and_counts():
