@@ -2,9 +2,11 @@ import pytest
 from PIL import Image
 
 from gif_color_changer.core import (
+    TRANSPARENT,
     cleanup_edges,
     parse_color_mapping,
     parse_palette,
+    parse_target_color,
     recolor_gif,
     replace_colors,
     rewrite_gif_palette,
@@ -19,6 +21,29 @@ def test_parse_color_mapping():
         (255, 255, 255),
         (255, 0, 0),
     )
+
+
+def test_parse_target_color_accepts_transparent_keywords():
+    assert parse_target_color("transparent") is TRANSPARENT
+    assert parse_target_color(" NONE ") is TRANSPARENT
+    assert parse_target_color("#FF0000") == (255, 0, 0)
+
+
+def test_parse_color_mapping_accepts_transparent_target():
+    assert parse_color_mapping("#FFFFFF=transparent") == (
+        (255, 255, 255),
+        TRANSPARENT,
+    )
+
+
+def test_parse_palette_allows_transparent_only_when_enabled():
+    assert parse_palette("#000000,transparent", allow_transparent=True) == [
+        (0, 0, 0),
+        TRANSPARENT,
+    ]
+
+    with pytest.raises(ValueError):
+        parse_palette("#000000,transparent")
 
 
 def test_parse_palette_accepts_comma_separated_hex_colors():
@@ -104,6 +129,73 @@ def test_replace_colors_softens_pixels_near_tolerance_edge():
         (0, 0, 0, 255),
         (125, 125, 125, 255),
         (244, 244, 244, 255),
+    ]
+
+
+def test_replace_colors_makes_matched_pixels_transparent():
+    image = Image.new("RGBA", (3, 1))
+    image.putdata(
+        [
+            (255, 255, 255, 255),
+            (250, 250, 250, 255),
+            (0, 0, 0, 255),
+        ]
+    )
+
+    recolored, counts = replace_colors(
+        image,
+        [((255, 255, 255), TRANSPARENT)],
+        tolerance=10,
+    )
+
+    assert counts == [2]
+    assert list(recolored.getdata()) == [
+        (255, 255, 255, 0),
+        (250, 250, 250, 0),
+        (0, 0, 0, 255),
+    ]
+
+
+def test_replace_colors_fades_alpha_toward_transparent_with_softness():
+    image = Image.new("RGBA", (3, 1))
+    image.putdata(
+        [
+            (255, 255, 255, 255),
+            (250, 250, 250, 255),
+            (244, 244, 244, 255),
+        ]
+    )
+
+    recolored, counts = replace_colors(
+        image,
+        [((255, 255, 255), TRANSPARENT)],
+        tolerance=10,
+        softness=10,
+    )
+
+    assert counts == [2]
+    # Exact match goes fully transparent; the edge pixel fades proportionally.
+    assert list(recolored.getdata()) == [
+        (255, 255, 255, 0),
+        (250, 250, 250, 128),
+        (244, 244, 244, 255),
+    ]
+
+
+def test_rewrite_palette_assigns_transparent_target_bucket():
+    image = Image.new("RGBA", (2, 1))
+    image.putdata([(1, 1, 1, 255), (254, 254, 254, 255)])
+
+    recolored, counts = rewrite_palette(
+        image,
+        [(0, 0, 0), (255, 255, 255)],
+        [(10, 20, 30), TRANSPARENT],
+    )
+
+    assert counts == [1, 1]
+    assert list(recolored.getdata()) == [
+        (10, 20, 30, 255),
+        (254, 254, 254, 0),
     ]
 
 

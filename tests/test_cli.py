@@ -129,6 +129,35 @@ def test_cli_cleanup_recolors_isolated_pixel_in_palette_mode(monkeypatch, tmp_pa
         assert list(output.convert("RGBA").getdata()) == [(255, 0, 0, 255)] * 9
 
 
+def test_cli_maps_color_to_transparent(monkeypatch, tmp_path):
+    input_path = tmp_path / "input.gif"
+    output_path = tmp_path / "output.gif"
+    image = Image.new("RGBA", (2, 1))
+    image.putdata([(255, 255, 255, 255), (0, 0, 0, 255)])
+    image.save(input_path)
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "gifcc",
+            str(input_path),
+            str(output_path),
+            "--map",
+            "#FFFFFF=transparent",
+        ],
+    )
+
+    main()
+
+    with Image.open(output_path) as output:
+        round_tripped = list(output.convert("RGBA").getdata())
+
+    # The white pixel is now transparent; the black pixel is untouched.
+    assert round_tripped[0][3] == 0
+    assert round_tripped[1] == (0, 0, 0, 255)
+
+
 def test_cli_rewrites_gif_with_palette_mode(monkeypatch, tmp_path):
     input_path = tmp_path / "input.gif"
     output_path = tmp_path / "output.gif"

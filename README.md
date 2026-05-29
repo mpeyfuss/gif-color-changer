@@ -44,6 +44,19 @@ You can pass as many mappings as you need. They run in order, and a pixel is onl
 
 Alpha is not part of color matching. The tool only changes RGB values and preserves each pixel's original alpha value, including fully transparent pixels.
 
+## Transparency
+
+The replacement (right-hand) side of a mapping can be the keyword `transparent` (or `none`) instead of a hex color, which makes every matched pixel fully transparent:
+
+```bash
+gifcc input.gif output.gif \
+  --map "#FFFFFF=transparent"
+```
+
+This knocks out a solid color, for example to drop a flat background. Matching is still RGB-only and respects `--tolerance`; only the right-hand side may be transparent. With `--softness`, pixels near the edge of the tolerance range fade out gradually (their alpha drops proportionally) instead of being cut out abruptly.
+
+`transparent` also works as a target in palette mode (see below).
+
 ## Tolerance
 
 GIF colors are often not exactly what they look like, especially after palette conversion or compression. Use `--tolerance` to match colors that are close to the source color.
@@ -82,6 +95,16 @@ gifcc input.gif output.gif \
 ```
 
 Both palettes must contain the same number of colors. The source and target palettes are matched by position, so the first source color maps to the first target color, the second source color maps to the second target color, and so on.
+
+Any target palette entry may be `transparent` (or `none`) to make every pixel assigned to that bucket fully transparent, while still mapping the remaining buckets to colors:
+
+```bash
+gifcc input.gif output.gif \
+  --source-palette "#000000,#808080,#FFFFFF" \
+  --target-palette "#1D3557,#E63946,transparent"
+```
+
+Source palette colors must be hex; only the target side accepts `transparent`.
 
 Palette mode cannot be combined with `--map`, `--tolerance`, or `--softness`.
 

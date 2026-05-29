@@ -6,8 +6,14 @@ from PIL import Image, ImageSequence
 
 
 RgbColor = tuple[int, int, int]
-ColorMapping = tuple[RgbColor, RgbColor]
+# Sentinel for a fully transparent target color. Only valid on the replacement
+# side of a mapping/palette; source matching always stays RGB-only.
+TRANSPARENT = "transparent"
+TRANSPARENT_KEYWORDS = ("transparent", "none")
+TargetColor = RgbColor | Literal["transparent"]
+ColorMapping = tuple[RgbColor, TargetColor]
 Palette = list[RgbColor]
+TargetPalette = list[TargetColor]
 DistanceMode = Literal["rgb", "weighted-rgb"]
 RGB_DISTANCE_WEIGHTS = np.array((0.2126, 0.7152, 0.0722), dtype=np.float32)
 
@@ -31,6 +37,14 @@ def hex_to_rgb(hex_color: str) -> RgbColor:
         raise ValueError(f"Expected a 6-digit hex color, got: {hex_color!r}") from None
 
 
+def parse_target_color(raw_color: str) -> TargetColor:
+    """Parse a replacement color, which may be the ``transparent``/``none``
+    keyword (fully clear) instead of a hex color."""
+    if raw_color.strip().lower() in TRANSPARENT_KEYWORDS:
+        return TRANSPARENT
+    return hex_to_rgb(raw_color)
+
+
 def parse_color_mapping(raw_mapping: str) -> ColorMapping:
     try:
         from_color, to_color = raw_mapping.split("=", 1)
@@ -44,15 +58,16 @@ def parse_color_mapping(raw_mapping: str) -> ColorMapping:
             f"Expected color mapping in FROM=TO format, got: {raw_mapping!r}"
         )
 
-    return hex_to_rgb(from_color), hex_to_rgb(to_color)
+    return hex_to_rgb(from_color), parse_target_color(to_color)
 
 
-def parse_palette(raw_palette: str) -> Palette:
+def parse_palette(raw_palette: str, allow_transparent: bool = False) -> TargetPalette:
     colors = [color.strip() for color in raw_palette.split(",")]
     if not colors or any(not color for color in colors):
         raise ValueError(f"Expected comma-separated hex colors, got: {raw_palette!r}")
 
-    return [hex_to_rgb(color) for color in colors]
+    parse = parse_target_color if allow_transparent else hex_to_rgb
+    return [parse(color) for color in colors]
 
 
 def validate_palette_mapping(source_palette: Palette, target_palette: Palette):
@@ -93,7 +108,8 @@ def replace_colors(
         color_mask = color_distance <= tolerance
         mask = ~changed_mask & color_mask
 
-        if softness > 0 and tolerance > 0:
+        soft = softness > 0 and tolerance > 0
+        if soft:
             soft_start = max(tolerance - softness, 0)
             blend_weights = np.ones(color_distance.shape, dtype=np.float32)
             soft_mask = mask & (color_distance > soft_start)
@@ -104,6 +120,19 @@ def replace_colors(
                     tolerance - color_distance[soft_mask]
                 ) / soft_range
 
+        if to_rgb == TRANSPARENT:
+            # Fade matched pixels toward fully transparent. With softness, the
+            # alpha drops proportionally near the tolerance edge; the RGB is
+            # left untouched since it is on its way to being invisible.
+            if soft:
+                weights = blend_weights[mask]
+                original_alpha = pixels[mask, 3].astype(np.float32)
+                pixels[mask, 3] = np.rint(original_alpha * (1.0 - weights)).astype(
+                    np.uint8
+                )
+            else:
+                pixels[mask, 3] = 0
+        elif soft:
             to_rgb_array = np.array(to_rgb, dtype=np.float32)
             source_rgb = original_rgb[mask].astype(np.float32)
             weights = blend_weights[mask, np.newaxis]
@@ -175,7 +204,7 @@ def cleanup_edges(labels: np.ndarray, num_labels: int, passes: int) -> np.ndarra
 def rewrite_palette(
     frame: Image.Image,
     source_palette: Palette,
-    target_palette: Palette,
+    target_palette: TargetPalette,
     distance: DistanceMode = "rgb",
     cleanup: int = 0,
 ):
@@ -185,7 +214,6 @@ def rewrite_palette(
 
     frame = frame.convert("RGBA")
     pixels = np.array(frame)  # pixels[y][x] = [R,G,B,A]
-    target_palette_array = np.array(target_palette, dtype=np.uint8)
 
     if distance == "weighted-rgb":
         original_rgb = pixels[:, :, :3].astype(np.float32)
@@ -228,9 +256,12 @@ def rewrite_palette(
 
     assignment_counts = [0] * len(source_palette)
 
-    for index, target_rgb in enumerate(target_palette_array):
+    for index, target_color in enumerate(target_palette):
         mask = labels == index
-        pixels[mask, :3] = target_rgb
+        if target_color == TRANSPARENT:
+            pixels[mask, 3] = 0
+        else:
+            pixels[mask, :3] = target_color
         assignment_counts[index] = int(np.count_nonzero(mask))
 
     return Image.fromarray(pixels, mode="RGBA"), assignment_counts
@@ -268,7 +299,7 @@ def recolor_gif(
 def rewrite_gif_palette(
     image: Image.Image,
     source_palette: Palette,
-    target_palette: Palette,
+    target_palette: TargetPalette,
     distance: DistanceMode = "rgb",
     cleanup: int = 0,
 ):

@@ -32,7 +32,11 @@ def main():
         "--map",
         dest="color_mappings",
         action="append",
-        help="Color mapping in FROM=TO format, e.g. '#FFFFFF=#FF0000'. Can be repeated.",
+        help=(
+            "Color mapping in FROM=TO format, e.g. '#FFFFFF=#FF0000'. The TO "
+            "color may be 'transparent' (or 'none') to make matched pixels "
+            "fully transparent. Can be repeated."
+        ),
     )
     parser.add_argument(
         "--source-palette",
@@ -40,7 +44,11 @@ def main():
     )
     parser.add_argument(
         "--target-palette",
-        help="Comma-separated target palette colors, e.g. '#1D3557,#E63946,#F1FAEE'.",
+        help=(
+            "Comma-separated target palette colors, e.g. "
+            "'#1D3557,#E63946,#F1FAEE'. Any entry may be 'transparent' (or "
+            "'none') to make pixels in that bucket fully transparent."
+        ),
     )
     parser.add_argument(
         "--distance",
@@ -102,7 +110,7 @@ def main():
 
         try:
             source_palette = parse_palette(args.source_palette)
-            target_palette = parse_palette(args.target_palette)
+            target_palette = parse_palette(args.target_palette, allow_transparent=True)
             validate_palette_mapping(source_palette, target_palette)
             distance = "rgb" if args.distance is None else args.distance
             validate_distance_mode(distance)
