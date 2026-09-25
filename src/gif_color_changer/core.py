@@ -1,19 +1,19 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Final, Literal
 
 import numpy as np
 from PIL import Image, ImageSequence
 
-
 RgbColor = tuple[int, int, int]
 # Sentinel for a fully transparent target color. Only valid on the replacement
 # side of a mapping/palette; source matching always stays RGB-only.
-TRANSPARENT = "transparent"
+TRANSPARENT: Final = "transparent"
 TRANSPARENT_KEYWORDS = ("transparent", "none")
 TargetColor = RgbColor | Literal["transparent"]
 ColorMapping = tuple[RgbColor, TargetColor]
-Palette = list[RgbColor]
-TargetPalette = list[TargetColor]
+Palette = Sequence[RgbColor]
+TargetPalette = Sequence[TargetColor]
 DistanceMode = Literal["rgb", "weighted-rgb"]
 RGB_DISTANCE_WEIGHTS = np.array((0.2126, 0.7152, 0.0722), dtype=np.float32)
 
@@ -32,7 +32,8 @@ def hex_to_rgb(hex_color: str) -> RgbColor:
         raise ValueError(f"Expected a 6-digit hex color, got: {hex_color!r}")
 
     try:
-        return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+        red, green, blue = (int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+        return red, green, blue
     except ValueError:
         raise ValueError(f"Expected a 6-digit hex color, got: {hex_color!r}") from None
 
@@ -61,16 +62,25 @@ def parse_color_mapping(raw_mapping: str) -> ColorMapping:
     return hex_to_rgb(from_color), parse_target_color(to_color)
 
 
-def parse_palette(raw_palette: str, allow_transparent: bool = False) -> TargetPalette:
+def _split_palette(raw_palette: str) -> list[str]:
     colors = [color.strip() for color in raw_palette.split(",")]
     if not colors or any(not color for color in colors):
         raise ValueError(f"Expected comma-separated hex colors, got: {raw_palette!r}")
-
-    parse = parse_target_color if allow_transparent else hex_to_rgb
-    return [parse(color) for color in colors]
+    return colors
 
 
-def validate_palette_mapping(source_palette: Palette, target_palette: Palette):
+def parse_palette(raw_palette: str) -> list[RgbColor]:
+    return [hex_to_rgb(color) for color in _split_palette(raw_palette)]
+
+
+def parse_target_palette(raw_palette: str) -> list[TargetColor]:
+    """Like ``parse_palette``, but entries may also be ``transparent``/``none``."""
+    return [parse_target_color(color) for color in _split_palette(raw_palette)]
+
+
+def validate_palette_mapping(
+    source_palette: Palette, target_palette: TargetPalette
+) -> None:
     if not source_palette:
         raise ValueError("Expected source palette to contain at least one color")
 
@@ -83,9 +93,11 @@ def validate_palette_mapping(source_palette: Palette, target_palette: Palette):
         )
 
 
-def validate_distance_mode(distance: str):
-    if distance not in ("rgb", "weighted-rgb"):
-        raise ValueError("Expected distance to be 'rgb' or 'weighted-rgb'")
+def validate_distance_mode(distance: str) -> DistanceMode:
+    match distance:
+        case "rgb" | "weighted-rgb":
+            return distance
+    raise ValueError("Expected distance to be 'rgb' or 'weighted-rgb'")
 
 
 def replace_colors(
@@ -93,7 +105,7 @@ def replace_colors(
     color_mappings: list[ColorMapping],
     tolerance: int,
     softness: int = 0,
-):
+) -> tuple[Image.Image, list[int]]:
     """Replace RGB colors while preserving the original alpha channel."""
     frame = frame.convert("RGBA")
     pixels = np.array(frame)  # pixels[y][x] = [R,G,B,A]
@@ -109,9 +121,9 @@ def replace_colors(
         mask = ~changed_mask & color_mask
 
         soft = softness > 0 and tolerance > 0
+        blend_weights = np.ones(color_distance.shape, dtype=np.float32)
         if soft:
             soft_start = max(tolerance - softness, 0)
-            blend_weights = np.ones(color_distance.shape, dtype=np.float32)
             soft_mask = mask & (color_distance > soft_start)
 
             if np.any(soft_mask):
@@ -156,9 +168,14 @@ def _neighbor_counts(mask: np.ndarray) -> np.ndarray:
     """
     padded = np.pad(mask, 1)
     return (
-        padded[:-2, :-2] + padded[:-2, 1:-1] + padded[:-2, 2:]
-        + padded[1:-1, :-2] + padded[1:-1, 2:]
-        + padded[2:, :-2] + padded[2:, 1:-1] + padded[2:, 2:]
+        padded[:-2, :-2]
+        + padded[:-2, 1:-1]
+        + padded[:-2, 2:]
+        + padded[1:-1, :-2]
+        + padded[1:-1, 2:]
+        + padded[2:, :-2]
+        + padded[2:, 1:-1]
+        + padded[2:, 2:]
     )
 
 
@@ -207,7 +224,7 @@ def rewrite_palette(
     target_palette: TargetPalette,
     distance: DistanceMode = "rgb",
     cleanup: int = 0,
-):
+) -> tuple[Image.Image, list[int]]:
     """Rewrite RGB colors while preserving the original alpha channel."""
     validate_palette_mapping(source_palette, target_palette)
     validate_distance_mode(distance)
@@ -272,7 +289,7 @@ def recolor_gif(
     color_mappings: list[ColorMapping],
     tolerance: int,
     softness: int = 0,
-):
+) -> RecoloredGif:
     frames = [frame.copy() for frame in ImageSequence.Iterator(image)]
     durations = [frame.info.get("duration", 100) for frame in frames]
     loop = image.info.get("loop", 0)
@@ -302,7 +319,7 @@ def rewrite_gif_palette(
     target_palette: TargetPalette,
     distance: DistanceMode = "rgb",
     cleanup: int = 0,
-):
+) -> RecoloredGif:
     validate_palette_mapping(source_palette, target_palette)
     validate_distance_mode(distance)
 

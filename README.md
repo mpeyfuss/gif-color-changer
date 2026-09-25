@@ -160,10 +160,20 @@ uv tool uninstall gif-color-changer
 
 ## Development
 
-Set up the repo:
+Set up the repo and install the git pre-commit hooks:
 
 ```bash
 uv sync
+make hooks
+```
+
+The hooks run [ruff](https://docs.astral.sh/ruff/) (lint + format) and
+[pyrefly](https://pyrefly.org/) (type checking) on every commit. CI runs the
+same hooks. To run them across the whole repo by hand:
+
+```bash
+make lint    # ruff check, ruff format, pyrefly
+make check   # lint + tests
 ```
 
 Run tests:

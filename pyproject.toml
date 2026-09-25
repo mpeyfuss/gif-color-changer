@@ -11,7 +11,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.6.2",
+    "pyrefly>=1.3.1",
     "pytest>=9.0.3",
+    "ruff>=0.16.9",
 ]
 
 [project.urls]
@@ -27,3 +30,32 @@ build-backend = "uv_build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # import sorting
+    "B",   # bugbear (likely bugs)
+    "UP",  # pyupgrade (modern syntax for 3.11+)
+    "SIM", # simplifications
+    "C4",  # comprehension cleanups
+]
+# The formatter owns line length; long help strings and docstrings are fine.
+ignore = ["E501"]
+
+[tool.pyrefly]
+project-includes = ["src", "tests"]
+python-version = "3.11"
+
+# Source must be fully annotated; tests need not be.
+[[tool.pyrefly.sub-config]]
+matches = "src/**"
+
+[tool.pyrefly.sub-config.errors]
+implicit-any-parameter = true

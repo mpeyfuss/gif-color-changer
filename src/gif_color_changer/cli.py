@@ -13,12 +13,12 @@ from PIL import Image
 from gif_color_changer.core import (
     parse_color_mapping,
     parse_palette,
+    parse_target_palette,
     recolor_gif,
     rewrite_gif_palette,
     validate_distance_mode,
     validate_palette_mapping,
 )
-
 
 DEFAULT_TOLERANCE = 50
 DEFAULT_SOFTNESS = 25
@@ -52,10 +52,7 @@ def main():
     )
     parser.add_argument(
         "--distance",
-        help=(
-            "Palette color distance mode: 'rgb' or 'weighted-rgb'. "
-            "Default: rgb"
-        ),
+        help="Palette color distance mode: 'rgb' or 'weighted-rgb'. Default: rgb",
     )
     parser.add_argument(
         "--cleanup",
@@ -110,10 +107,11 @@ def main():
 
         try:
             source_palette = parse_palette(args.source_palette)
-            target_palette = parse_palette(args.target_palette, allow_transparent=True)
+            target_palette = parse_target_palette(args.target_palette)
             validate_palette_mapping(source_palette, target_palette)
-            distance = "rgb" if args.distance is None else args.distance
-            validate_distance_mode(distance)
+            distance = validate_distance_mode(
+                "rgb" if args.distance is None else args.distance
+            )
         except ValueError as exc:
             parser.error(str(exc))
 
@@ -125,7 +123,9 @@ def main():
             )
 
         for (from_rgb, to_rgb), assigned_count in zip(
-            zip(source_palette, target_palette), recolored.changed_counts
+            zip(source_palette, target_palette, strict=True),
+            recolored.changed_counts,
+            strict=True,
         ):
             print(f"{from_rgb} -> {to_rgb}: assigned {assigned_count} pixel(s)")
     else:
@@ -152,7 +152,7 @@ def main():
             recolored = recolor_gif(image, color_mappings, tolerance, softness)
 
         for (from_rgb, to_rgb), changed_count in zip(
-            color_mappings, recolored.changed_counts
+            color_mappings, recolored.changed_counts, strict=True
         ):
             print(f"{from_rgb} -> {to_rgb}: changed {changed_count} pixel(s)")
 

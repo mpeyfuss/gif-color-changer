@@ -102,9 +102,7 @@ def test_cli_cleanup_recolors_isolated_pixel_in_palette_mode(monkeypatch, tmp_pa
     input_path = tmp_path / "input.gif"
     output_path = tmp_path / "output.gif"
     image = Image.new("RGBA", (3, 3), (0, 0, 0, 255))
-    pixels = list(image.getdata())
-    pixels[4] = (255, 255, 255, 255)  # lone white pixel in a field of black
-    image.putdata(pixels)
+    image.putpixel((1, 1), (255, 255, 255, 255))  # lone white pixel in a field of black
     image.save(input_path)
 
     monkeypatch.setattr(
@@ -126,7 +124,9 @@ def test_cli_cleanup_recolors_isolated_pixel_in_palette_mode(monkeypatch, tmp_pa
     main()
 
     with Image.open(output_path) as output:
-        assert list(output.convert("RGBA").getdata()) == [(255, 0, 0, 255)] * 9
+        assert (
+            list(output.convert("RGBA").get_flattened_data()) == [(255, 0, 0, 255)] * 9
+        )
 
 
 def test_cli_maps_color_to_transparent(monkeypatch, tmp_path):
@@ -151,11 +151,11 @@ def test_cli_maps_color_to_transparent(monkeypatch, tmp_path):
     main()
 
     with Image.open(output_path) as output:
-        round_tripped = list(output.convert("RGBA").getdata())
+        round_tripped = output.convert("RGBA")
 
     # The white pixel is now transparent; the black pixel is untouched.
-    assert round_tripped[0][3] == 0
-    assert round_tripped[1] == (0, 0, 0, 255)
+    assert round_tripped.getchannel("A").getpixel((0, 0)) == 0
+    assert round_tripped.getpixel((1, 0)) == (0, 0, 0, 255)
 
 
 def test_cli_rewrites_gif_with_palette_mode(monkeypatch, tmp_path):
@@ -184,7 +184,7 @@ def test_cli_rewrites_gif_with_palette_mode(monkeypatch, tmp_path):
     main()
 
     with Image.open(output_path) as output:
-        assert list(output.convert("RGBA").getdata()) == [
+        assert list(output.convert("RGBA").get_flattened_data()) == [
             (255, 0, 0, 255),
             (0, 0, 255, 255),
         ]

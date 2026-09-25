@@ -7,6 +7,7 @@ from gif_color_changer.core import (
     parse_color_mapping,
     parse_palette,
     parse_target_color,
+    parse_target_palette,
     recolor_gif,
     replace_colors,
     rewrite_gif_palette,
@@ -36,8 +37,8 @@ def test_parse_color_mapping_accepts_transparent_target():
     )
 
 
-def test_parse_palette_allows_transparent_only_when_enabled():
-    assert parse_palette("#000000,transparent", allow_transparent=True) == [
+def test_parse_target_palette_allows_transparent_but_parse_palette_does_not():
+    assert parse_target_palette("#000000,transparent") == [
         (0, 0, 0),
         TRANSPARENT,
     ]
@@ -99,7 +100,7 @@ def test_replace_colors_maps_visible_pixels_once_and_preserves_alpha():
     )
 
     assert counts == [2, 2]
-    assert list(recolored.getdata()) == [
+    assert list(recolored.get_flattened_data()) == [
         (0, 0, 0, 255),
         (0, 0, 0, 255),
         (255, 0, 0, 0),
@@ -125,7 +126,7 @@ def test_replace_colors_softens_pixels_near_tolerance_edge():
     )
 
     assert counts == [2]
-    assert list(recolored.getdata()) == [
+    assert list(recolored.get_flattened_data()) == [
         (0, 0, 0, 255),
         (125, 125, 125, 255),
         (244, 244, 244, 255),
@@ -149,7 +150,7 @@ def test_replace_colors_makes_matched_pixels_transparent():
     )
 
     assert counts == [2]
-    assert list(recolored.getdata()) == [
+    assert list(recolored.get_flattened_data()) == [
         (255, 255, 255, 0),
         (250, 250, 250, 0),
         (0, 0, 0, 255),
@@ -175,7 +176,7 @@ def test_replace_colors_fades_alpha_toward_transparent_with_softness():
 
     assert counts == [2]
     # Exact match goes fully transparent; the edge pixel fades proportionally.
-    assert list(recolored.getdata()) == [
+    assert list(recolored.get_flattened_data()) == [
         (255, 255, 255, 0),
         (250, 250, 250, 128),
         (244, 244, 244, 255),
@@ -193,7 +194,7 @@ def test_rewrite_palette_assigns_transparent_target_bucket():
     )
 
     assert counts == [1, 1]
-    assert list(recolored.getdata()) == [
+    assert list(recolored.get_flattened_data()) == [
         (10, 20, 30, 255),
         (254, 254, 254, 0),
     ]
@@ -217,7 +218,7 @@ def test_rewrite_palette_forces_pixels_to_nearest_source_palette_bucket():
     )
 
     assert counts == [2, 2]
-    assert list(recolored.getdata()) == [
+    assert list(recolored.get_flattened_data()) == [
         (10, 20, 30, 255),
         (200, 210, 220, 255),
         (200, 210, 220, 255),
@@ -235,7 +236,7 @@ def test_rewrite_palette_breaks_distance_ties_by_first_source_color():
     )
 
     assert counts == [1, 0]
-    assert list(recolored.getdata()) == [(255, 0, 0, 255)]
+    assert list(recolored.get_flattened_data()) == [(255, 0, 0, 255)]
 
 
 def test_rewrite_palette_supports_weighted_rgb_distance():
@@ -243,9 +244,7 @@ def test_rewrite_palette_supports_weighted_rgb_distance():
     source_palette = [(0, 0, 100), (0, 50, 0)]
     target_palette = [(255, 0, 0), (0, 0, 255)]
 
-    rgb_recolored, rgb_counts = rewrite_palette(
-        image, source_palette, target_palette
-    )
+    rgb_recolored, rgb_counts = rewrite_palette(image, source_palette, target_palette)
     weighted_recolored, weighted_counts = rewrite_palette(
         image,
         source_palette,
@@ -255,8 +254,8 @@ def test_rewrite_palette_supports_weighted_rgb_distance():
 
     assert rgb_counts == [0, 1]
     assert weighted_counts == [1, 0]
-    assert list(rgb_recolored.getdata()) == [(0, 0, 255, 255)]
-    assert list(weighted_recolored.getdata()) == [(255, 0, 0, 255)]
+    assert list(rgb_recolored.get_flattened_data()) == [(0, 0, 255, 255)]
+    assert list(weighted_recolored.get_flattened_data()) == [(255, 0, 0, 255)]
 
 
 def test_cleanup_edges_absorbs_isolated_speckle_into_neighbor_majority():
@@ -311,29 +310,23 @@ def test_rewrite_palette_cleanup_erases_stray_opaque_pixel_into_transparency():
     source_palette = [(255, 255, 0), (0, 0, 128)]
     target_palette = [(255, 255, 0), (0, 0, 128)]
 
-    recolored, _ = rewrite_palette(
-        image, source_palette, target_palette, cleanup=1
-    )
+    recolored, _ = rewrite_palette(image, source_palette, target_palette, cleanup=1)
 
     # Surrounded by transparency, the stray pixel takes on that transparency.
-    assert all(pixel[3] == 0 for pixel in recolored.getdata())
+    assert recolored.getchannel("A").getextrema() == (0, 0)
 
 
 def test_rewrite_palette_cleanup_fills_transparent_hole_inside_a_region():
     image = Image.new("RGBA", (3, 3), (255, 255, 0, 255))  # solid opaque region
-    pixels = list(image.getdata())
-    pixels[4] = (0, 0, 128, 0)  # one transparent hole in the middle
-    image.putdata(pixels)
+    image.putpixel((1, 1), (0, 0, 128, 0))  # one transparent hole in the middle
 
     source_palette = [(255, 255, 0), (0, 0, 128)]
     target_palette = [(255, 255, 0), (0, 0, 128)]
 
-    recolored, _ = rewrite_palette(
-        image, source_palette, target_palette, cleanup=1
-    )
+    recolored, _ = rewrite_palette(image, source_palette, target_palette, cleanup=1)
 
     # Surrounded by the region, the hole fills in with its color and opacity.
-    assert list(recolored.getdata()) == [(255, 255, 0, 255)] * 9
+    assert list(recolored.get_flattened_data()) == [(255, 255, 0, 255)] * 9
 
 
 def test_cleanup_edges_is_a_no_op_when_passes_is_zero():
@@ -349,9 +342,7 @@ def test_cleanup_edges_is_a_no_op_when_passes_is_zero():
 
 def test_rewrite_palette_cleanup_recolors_isolated_pixel_to_neighbor_color():
     image = Image.new("RGBA", (3, 3), (0, 0, 0, 255))
-    pixels = list(image.getdata())
-    pixels[4] = (255, 255, 255, 255)  # lone white pixel in a field of black
-    image.putdata(pixels)
+    image.putpixel((1, 1), (255, 255, 255, 255))  # lone white pixel in a field of black
 
     source_palette = [(0, 0, 0), (255, 255, 255)]
     target_palette = [(10, 20, 30), (200, 210, 220)]
@@ -362,7 +353,7 @@ def test_rewrite_palette_cleanup_recolors_isolated_pixel_to_neighbor_color():
 
     # The lone white pixel is reassigned to the surrounding black bucket.
     assert counts == [9, 0]
-    assert list(recolored.getdata()) == [(10, 20, 30, 255)] * 9
+    assert list(recolored.get_flattened_data()) == [(10, 20, 30, 255)] * 9
 
 
 def test_rewrite_gif_palette_returns_frames_metadata_and_counts():
@@ -380,7 +371,7 @@ def test_rewrite_gif_palette_returns_frames_metadata_and_counts():
     assert recolored.durations == [75]
     assert recolored.loop == 1
     assert recolored.changed_counts == [1, 1]
-    assert list(recolored.frames[0].getdata()) == [
+    assert list(recolored.frames[0].get_flattened_data()) == [
         (255, 0, 0, 255),
         (0, 0, 255, 255),
     ]
@@ -400,4 +391,4 @@ def test_recolor_gif_returns_frames_metadata_and_counts():
     assert recolored.durations == [75]
     assert recolored.loop == 1
     assert recolored.changed_counts == [1]
-    assert list(recolored.frames[0].getdata()) == [(255, 0, 0, 255)]
+    assert list(recolored.frames[0].get_flattened_data()) == [(255, 0, 0, 255)]

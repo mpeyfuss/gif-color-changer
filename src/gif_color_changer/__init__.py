@@ -1,2 +1,1 @@
 """GIF color replacement CLI."""
-

@@ -1,4 +1,12 @@
-.PHONY: test test-all test-3.11 test-3.12 test-3.13 test-3.14
+.PHONY: hooks lint check test test-all test-3.11 test-3.12 test-3.13 test-3.14
+
+hooks:
+	uv run pre-commit install
+
+lint:
+	uv run pre-commit run --all-files
+
+check: lint test
 
 test:
 	uv run pytest
