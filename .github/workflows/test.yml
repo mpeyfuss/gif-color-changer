@@ -6,20 +6,21 @@ on:
 
 jobs:
   test:
-    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
 
       - name: Run tests
-        run: uv run --python ${{ matrix.python-version }} pytest
+        run: bun test
+
+      - name: Build web app
+        run: bun run build

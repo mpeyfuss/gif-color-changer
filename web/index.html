@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Replace colors across every frame of a GIF, right in your browser." />
+    <title>GIF Color Changer</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <header>
+      <h1>GIF Color Changer</h1>
+      <p>Replace colors across every frame of a GIF. Everything runs in your browser; your GIF is never uploaded.</p>
+    </header>
+
+    <main>
+      <section class="controls">
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="file-input" accept="image/gif" />
+          <span id="dropzone-text">Drop a GIF here or click to choose one</span>
+        </label>
+
+        <div class="tabs" role="tablist">
+          <button type="button" role="tab" data-mode="map" aria-selected="true">Map colors</button>
+          <button type="button" role="tab" data-mode="palette" aria-selected="false">Rewrite palette</button>
+        </div>
+
+        <p class="hint" id="mode-hint"></p>
+
+        <div class="rows" id="rows"></div>
+        <button type="button" class="secondary" id="add-row">Add color</button>
+
+        <div class="settings" data-for="map">
+          <label>
+            <span>Tolerance <output id="tolerance-value"></output></span>
+            <input type="range" id="tolerance" min="0" max="255" value="50" />
+          </label>
+          <label>
+            <span>Softness <output id="softness-value"></output></span>
+            <input type="range" id="softness" min="0" max="255" value="25" />
+          </label>
+        </div>
+
+        <div class="settings" data-for="palette" hidden>
+          <label>
+            <span>Distance</span>
+            <select id="distance">
+              <option value="rgb">RGB</option>
+              <option value="weighted-rgb">Weighted RGB (perceptual)</option>
+            </select>
+          </label>
+          <label>
+            <span>Edge cleanup <output id="cleanup-value"></output></span>
+            <input type="range" id="cleanup" min="0" max="10" value="0" />
+          </label>
+        </div>
+      </section>
+
+      <section class="previews">
+        <figure>
+          <figcaption>Original <small>click to pick a source color</small></figcaption>
+          <div class="frame"><img id="original" alt="" /></div>
+        </figure>
+        <figure>
+          <figcaption>Result <small id="status"></small></figcaption>
+          <div class="frame"><img id="result" alt="" /></div>
+        </figure>
+        <p class="error" id="error" role="alert"></p>
+        <ul class="summary" id="summary"></ul>
+        <a class="button" id="download" hidden>Download GIF</a>
+      </section>
+    </main>
+
+    <template id="row-template">
+      <div class="row">
+        <input type="color" class="source" aria-label="Source color" />
+        <span class="arrow" aria-hidden="true">→</span>
+        <input type="color" class="target" aria-label="Replacement color" />
+        <label class="transparent"><input type="checkbox" /> transparent</label>
+        <button type="button" class="remove" aria-label="Remove color">×</button>
+      </div>
+    </template>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

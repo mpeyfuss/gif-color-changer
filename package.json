@@ -1,0 +1,39 @@
+{
+  "name": "gif-color-changer",
+  "version": "1.0.0",
+  "description": "Replace colors across every frame of a GIF, from the command line or in your browser.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mpeyfuss/gif-color-changer.git"
+  },
+  "bugs": "https://github.com/mpeyfuss/gif-color-changer/issues",
+  "bin": {
+    "gifcc": "src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "dev": "vite web",
+    "build": "vite build web",
+    "preview": "vite preview web"
+  },
+  "dependencies": {
+    "comlink": "^4.4.2",
+    "commander": "^15.0.0",
+    "gifenc": "^1.0.3",
+    "modern-gif": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1"
+  }
+}

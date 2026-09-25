@@ -1,18 +1,29 @@
 # GIF Color Changer
 
-Command line tool for replacing colors across every frame of a GIF.
+Replace colors across every frame of a GIF, from the command line or in your browser.
+
+## Web app
+
+**https://mpeyfuss.github.io/gif-color-changer/**
+
+Everything runs locally in your browser. Your GIF is never uploaded anywhere. Click the original preview to pick a source color from it.
 
 ## Install
 
+The command line tool runs on [Bun](https://bun.sh):
+
 ```bash
-uv tool install gif-color-changer
+bun install -g github:mpeyfuss/gif-color-changer
 ```
 
 From a local checkout:
 
 ```bash
-uv tool install .
+bun install
+bun link
 ```
+
+> The Python package on PyPI (`uv tool install gif-color-changer`) is deprecated as of 1.0.0 and will not receive updates. Remove it with `uv tool uninstall gif-color-changer`.
 
 ## Usage
 
@@ -56,6 +67,8 @@ gifcc input.gif output.gif \
 This knocks out a solid color, for example to drop a flat background. Matching is still RGB-only and respects `--tolerance`; only the right-hand side may be transparent. With `--softness`, pixels near the edge of the tolerance range fade out gradually (their alpha drops proportionally) instead of being cut out abruptly.
 
 `transparent` also works as a target in palette mode (see below).
+
+GIF transparency is all-or-nothing, so when the output is saved, only fully transparent pixels stay transparent; every other pixel becomes fully opaque. A `--softness` fade toward `transparent` therefore ends in a hard edge where the fade reaches zero alpha.
 
 ## Tolerance
 
@@ -155,55 +168,40 @@ If a mapping says it changed `0` pixels, the source color probably does not exis
 ## Uninstall
 
 ```bash
-uv tool uninstall gif-color-changer
+bun remove -g gif-color-changer
 ```
 
 ## Development
 
+The core (`src/`) is plain TypeScript with no Node or browser APIs, so the same code runs the CLI (`src/cli.ts`) and the web app (`web/`), where it runs in a Web Worker.
+
 Set up the repo:
 
 ```bash
-uv sync
+bun install
 ```
 
-Run tests:
+Run tests and the typechecker:
 
 ```bash
-uv run pytest
+bun test
+bun run typecheck
 ```
 
-Run tests against a specific Python version:
+`tests/parity.test.ts` checks the TypeScript core byte-for-byte against output captured from the original Python implementation. See `scripts/make_fixtures.py` to regenerate or extend those fixtures.
+
+Run the command without installing it:
 
 ```bash
-uv run --python 3.11 pytest
-```
-
-Or use the Makefile:
-
-```bash
-make test
-make test-all
-make test-3.11
-```
-
-Run the command without installing it as a tool:
-
-```bash
-uv run gifcc input.gif output.gif \
+bun src/cli.ts input.gif output.gif \
   --map "#FFFFFF=#FF0000"
 ```
 
-You can also run the compatibility wrapper directly:
+Run the web app locally, or build it to `web/dist/`:
 
 ```bash
-uv run python main.py input.gif output.gif \
-  --map "#FFFFFF=#FF0000"
+bun run dev
+bun run build
 ```
 
-## Build
-
-```bash
-uv build
-```
-
-That writes the package artifacts to `dist/`.
+Pushes to `main` deploy the web app to GitHub Pages.
