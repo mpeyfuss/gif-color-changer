@@ -1,0 +1,5 @@
+[install]
+# Supply-chain guard: only resolve package versions that have been on the
+# registry for at least 7 days (in seconds), giving time for malicious
+# releases to be caught and pulled before we install them.
+minimumReleaseAge = 604800

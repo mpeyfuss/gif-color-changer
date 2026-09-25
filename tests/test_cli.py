@@ -188,3 +188,17 @@ def test_cli_rewrites_gif_with_palette_mode(monkeypatch, tmp_path):
             (255, 0, 0, 255),
             (0, 0, 255, 255),
         ]
+
+
+def test_cli_accepts_argv_directly(tmp_path, capsys):
+    input_path = tmp_path / "input.gif"
+    output_path = tmp_path / "output.gif"
+    image = Image.new("RGBA", (2, 1))
+    image.putdata([(255, 255, 255, 255), (0, 0, 0, 255)])
+    image.save(input_path)
+
+    main([str(input_path), str(output_path), "--map", "#FFFFFF=#FF0000"])
+
+    assert "changed 1 pixel(s)" in capsys.readouterr().out
+    with Image.open(output_path) as output:
+        assert output.convert("RGBA").getpixel((0, 0)) == (255, 0, 0, 255)

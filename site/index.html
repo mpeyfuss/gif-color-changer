@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>gifcc · GIF Color Changer</title>
+    <meta
+      name="description"
+      content="Replace colors across every frame of a GIF. Try it in your browser, then install the gifcc command-line tool."
+    />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='16' height='16' fill='%23E63946'/><rect x='16' width='16' height='16' fill='%232A9D8F'/><rect y='16' width='16' height='16' fill='%231D3557'/><rect x='16' y='16' width='16' height='16' fill='%23F4A261'/></svg>" />
+    <link rel="alternate" type="text/plain" href="llms.txt" title="llms.txt" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true"></span>gifcc</a>
+        <nav aria-label="Sections">
+          <a href="#try">Try it</a>
+          <a href="#install">Install</a>
+          <a href="#agents">Agents</a>
+          <a href="#reference">Reference</a>
+          <a href="https://github.com/mpeyfuss/gif-color-changer">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero wrap">
+        <h1>Recolor every frame of a GIF.</h1>
+        <p class="lede">
+          <code>gifcc</code> swaps colors, remaps whole palettes, and knocks out backgrounds across an
+          entire animation from the command line. Try it below. It runs in your browser on
+          <a href="https://pyodide.org">Pyodide</a>, and nothing is uploaded. When you're happy with the result,
+          install it with one command.
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="#try">Try it in the browser</a>
+          <a class="button" href="#install">Install the CLI</a>
+        </div>
+      </section>
+
+      <section id="try" class="wrap section">
+        <div class="section-head">
+          <h2>Try it</h2>
+          <p id="runtime-status" class="status" data-state="loading" role="status">
+            <span class="dot" aria-hidden="true"></span><span class="status-text">Starting Python…</span>
+          </p>
+        </div>
+        <p class="hint">
+          The first load downloads Python, numpy and Pillow (about 15&nbsp;MB), so it takes a moment. Later runs are fast.
+        </p>
+        <p class="note">
+          <strong>Works best on simple GIFs</strong> with flat colors, like logos, icons, pixel art and flat
+          illustrations. Complex GIFs (photos, gradients, heavy dithering) may not work as well. Matching is by color,
+          not position, so it's especially hard to target one specific area: every matching pixel changes, wherever it
+          is.
+        </p>
+
+        <div class="workbench">
+          <div class="panel controls">
+            <div class="field">
+              <span class="label">1 · Input</span>
+              <label id="dropzone" class="dropzone">
+                <input id="file-input" type="file" accept="image/gif,image/*" />
+                <span><strong>Drop a GIF</strong> or click to choose one</span>
+              </label>
+              <button id="use-sample" class="button small" type="button">Use the sample GIF</button>
+            </div>
+
+            <div class="field" id="detected-field" hidden>
+              <span class="label">Colors in the first frame</span>
+              <div id="detected" class="swatches"></div>
+              <p class="hint small">
+                Click a swatch or click the input image to set the selected <em>source</em> color.
+              </p>
+            </div>
+
+            <div class="field">
+              <span class="label">2 · Mode</span>
+              <div class="tabs" role="tablist">
+                <button role="tab" id="tab-map" aria-selected="true" aria-controls="panel-map" type="button">
+                  Map colors
+                </button>
+                <button role="tab" id="tab-palette" aria-selected="false" aria-controls="panel-palette" type="button">
+                  Palette rewrite
+                </button>
+              </div>
+
+              <div id="panel-map" role="tabpanel" aria-labelledby="tab-map">
+                <p class="hint small">
+                  Replace pixels close to each source color. Pixels outside the tolerance are left alone.
+                </p>
+                <div class="pairs" id="map-pairs"></div>
+                <button class="button small" type="button" data-add="map">+ Add mapping</button>
+                <div class="slider">
+                  <label for="tolerance">Tolerance <output id="tolerance-out"></output></label>
+                  <input id="tolerance" type="range" min="0" max="255" value="50" />
+                </div>
+                <div class="slider">
+                  <label for="softness">Softness <output id="softness-out"></output></label>
+                  <input id="softness" type="range" min="0" max="255" value="25" />
+                </div>
+              </div>
+
+              <div id="panel-palette" role="tabpanel" aria-labelledby="tab-palette" hidden>
+                <p class="hint small">
+                  Every pixel snaps to its nearest source color, then takes the target color in the same row.
+                </p>
+                <div class="pairs" id="palette-pairs"></div>
+                <div class="row-actions">
+                  <button class="button small" type="button" data-add="palette">+ Add color</button>
+                  <button class="button small" type="button" id="palette-from-detected" disabled>
+                    Use detected colors
+                  </button>
+                </div>
+                <div class="inline-fields">
+                  <label>
+                    Distance
+                    <select id="distance">
+                      <option value="rgb">rgb</option>
+                      <option value="weighted-rgb">weighted-rgb</option>
+                    </select>
+                  </label>
+                  <label>
+                    Cleanup passes
+                    <input id="cleanup" type="number" min="0" max="10" value="0" />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <span class="label">3 · Command</span>
+              <div class="code-block">
+                <pre><code id="command"></code></pre>
+                <button class="copy" type="button" data-copy-from="command">Copy</button>
+              </div>
+              <button id="run" class="button primary wide" type="button" disabled>Run</button>
+            </div>
+          </div>
+
+          <div class="panel previews">
+            <figure>
+              <figcaption>Input</figcaption>
+              <div class="stage checker" id="input-stage">
+                <img id="input-img" alt="Input GIF" hidden />
+                <p class="empty">No GIF yet</p>
+              </div>
+            </figure>
+            <figure>
+              <figcaption>
+                Output
+                <a id="download" class="button small" hidden>Download</a>
+              </figcaption>
+              <div class="stage checker" id="output-stage">
+                <img id="output-img" alt="Recolored GIF" hidden />
+                <p class="empty" id="output-empty">Run to see the result</p>
+              </div>
+              <pre id="log" class="log" hidden></pre>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <section id="install" class="wrap section">
+        <h2>Install</h2>
+        <p>
+          <code>gifcc</code> is on <a href="https://pypi.org/project/gif-color-changer/">PyPI</a> as
+          <code>gif-color-changer</code> and needs Python 3.11 or newer. The command above works as-is once it's installed.
+        </p>
+        <div class="cards">
+          <div class="card">
+            <h3>uv <span class="tag">recommended</span></h3>
+            <div class="code-block">
+              <pre><code>uv tool install gif-color-changer</code></pre>
+              <button class="copy" type="button">Copy</button>
+            </div>
+          </div>
+          <div class="card">
+            <h3>pipx</h3>
+            <div class="code-block">
+              <pre><code>pipx install gif-color-changer</code></pre>
+              <button class="copy" type="button">Copy</button>
+            </div>
+          </div>
+          <div class="card span-all">
+            <h3>One-off, no install</h3>
+            <div class="code-block">
+              <pre><code>uvx --from gif-color-changer gifcc in.gif out.gif --map "#FFFFFF=#FF0000"</code></pre>
+              <button class="copy" type="button">Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <h3>Examples</h3>
+        <div class="examples">
+          <p>Swap two colors:</p>
+          <div class="code-block">
+            <pre><code>gifcc input.gif output.gif \
+  --map "#FFFFFF=#FF0000" \
+  --map "#000000=#00FF00"</code></pre>
+            <button class="copy" type="button">Copy</button>
+          </div>
+          <p>Remove a flat background:</p>
+          <div class="code-block">
+            <pre><code>gifcc input.gif output.gif --map "#FFFFFF=transparent"</code></pre>
+            <button class="copy" type="button">Copy</button>
+          </div>
+          <p>Rewrite a whole palette and clean up antialiased edges:</p>
+          <div class="code-block">
+            <pre><code>gifcc input.gif output.gif \
+  --source-palette "#000000,#808080,#FFFFFF" \
+  --target-palette "#1D3557,#E63946,#F1FAEE" \
+  --cleanup 2</code></pre>
+            <button class="copy" type="button">Copy</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="agents" class="wrap section">
+        <h2>Use it from an AI agent</h2>
+        <p>
+          <code>gifcc</code> is a plain CLI with predictable output, so coding agents can install and drive it
+          themselves. Two ways to hand it over:
+        </p>
+        <div class="cards two">
+          <div class="card">
+            <h3>Point the agent at <code>llms.txt</code></h3>
+            <p>
+              A plain-text guide with install steps, every flag and its default, and worked examples. Paste the
+              link into any agent's chat.
+            </p>
+            <div class="code-block">
+              <pre><code id="llms-url">https://mpeyfuss.github.io/gif-color-changer/llms.txt</code></pre>
+              <button class="copy" type="button">Copy</button>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Install the Claude Code skill</h3>
+            <p>
+              Claude then recognizes GIF recoloring requests on its own. It installs <code>gifcc</code> if needed,
+              finds the real colors in your GIF, and checks the result.
+            </p>
+            <div class="code-block">
+              <pre><code>mkdir -p ~/.claude/skills/gifcc && curl -fsSL \
+  https://mpeyfuss.github.io/gif-color-changer/SKILL.md \
+  -o ~/.claude/skills/gifcc/SKILL.md</code></pre>
+              <button class="copy" type="button">Copy</button>
+            </div>
+            <p class="hint small">For a single project, use <code>.claude/skills/gifcc/</code> instead.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="reference" class="wrap section">
+        <h2>Flag reference</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Flag</th><th>Mode</th><th>Default</th><th>What it does</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>--map FROM=TO</code></td><td>map</td><td></td>
+                <td>Replace <code>FROM</code> with <code>TO</code>. Repeatable. <code>TO</code> may be <code>transparent</code>.</td>
+              </tr>
+              <tr>
+                <td><code>--tolerance N</code></td><td>map</td><td>50</td>
+                <td>How close (0–255 RGB distance) a pixel must be to <code>FROM</code> to match.</td>
+              </tr>
+              <tr>
+                <td><code>--softness N</code></td><td>map</td><td>25</td>
+                <td>Blend pixels in the outer <code>N</code> of the tolerance range instead of replacing them outright. <code>0</code> gives a hard replacement.</td>
+              </tr>
+              <tr>
+                <td><code>--source-palette A,B,…</code></td><td>palette</td><td></td>
+                <td>Hex colors every pixel is snapped to (nearest wins).</td>
+              </tr>
+              <tr>
+                <td><code>--target-palette A,B,…</code></td><td>palette</td><td></td>
+                <td>Replacement for each source color, by position. Entries may be <code>transparent</code>.</td>
+              </tr>
+              <tr>
+                <td><code>--distance</code></td><td>palette</td><td>rgb</td>
+                <td><code>rgb</code> or <code>weighted-rgb</code>, which weights channels by perceived luminance.</td>
+              </tr>
+              <tr>
+                <td><code>--cleanup N</code></td><td>palette</td><td>0</td>
+                <td>Edge-cleanup passes that absorb stray pixels into the region around them.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Alpha is never used for matching; only the RGB values change. The full guide is in the
+          <a href="https://github.com/mpeyfuss/gif-color-changer#readme">README</a>.
+        </p>
+      </section>
+    </main>
+
+    <footer class="wrap footer">
+      <span>MIT licensed · <a href="https://github.com/mpeyfuss/gif-color-changer">Source on GitHub</a></span>
+      <span id="footer-versions"></span>
+    </footer>
+
+    <template id="pair-template">
+      <div class="pair">
+        <span class="pair-side">
+          <input type="color" class="from-color" aria-label="Source color" />
+          <input type="text" class="from-hex hex" aria-label="Source hex" spellcheck="false" maxlength="7" />
+        </span>
+        <span class="arrow" aria-hidden="true">→</span>
+        <span class="pair-side">
+          <input type="color" class="to-color" aria-label="Target color" />
+          <input type="text" class="to-hex hex" aria-label="Target hex" spellcheck="false" maxlength="11" />
+          <label class="clear-toggle" title="Make matched pixels transparent">
+            <input type="checkbox" class="to-transparent" /> clear
+          </label>
+        </span>
+        <button type="button" class="remove" aria-label="Remove row">×</button>
+      </div>
+    </template>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

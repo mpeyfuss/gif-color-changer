@@ -1,0 +1,65 @@
+# gif-color-changer (gifcc)
+
+> Command-line tool that replaces colors across every frame of an animated GIF. It keeps frame timing, looping and per-pixel alpha, and matches colors by RGB only.
+
+Works best on simple GIFs with flat colors (logos, icons, pixel art, flat illustrations). Complex GIFs (photos, gradients, heavy dithering, many similar shades) may not work as well. Matching is by color, not position, so it can't target one specific area: every matching pixel in every frame changes. Set expectations with the user before promising a region-specific edit.
+
+- Package: gif-color-changer on PyPI (Python >= 3.11)
+- Command: gifcc
+- Source: https://github.com/mpeyfuss/gif-color-changer
+- Playground: https://mpeyfuss.github.io/gif-color-changer/
+- Claude Code skill: https://mpeyfuss.github.io/gif-color-changer/SKILL.md
+
+## Install
+
+    uv tool install gif-color-changer        # recommended
+    pipx install gif-color-changer           # alternative
+    uvx --from gif-color-changer gifcc ...   # run once without installing
+
+Check that it's installed with: command -v gifcc
+
+## Usage
+
+    gifcc INPUT.gif OUTPUT.gif (--map FROM=TO ... | --source-palette ... --target-palette ...) [options]
+
+Always quote hex colors in the shell. An unquoted "#" starts a comment.
+
+### Map mode: replace specific colors
+
+    gifcc in.gif out.gif --map "#FFFFFF=#FF0000" --map "#000000=#00FF00"
+    gifcc in.gif out.gif --map "#FFFFFF=transparent"      # remove a flat background
+
+- --map FROM=TO   Repeatable. Mappings run in order, and each pixel changes at most once. TO may be a hex color, or "transparent" / "none".
+- --tolerance N   Default 50. The RGB distance within which a pixel matches FROM.
+- --softness N    Default 25. Blend pixels in the outer N of the tolerance band instead of replacing them outright. 0 means a hard replacement.
+
+### Palette mode: remap every pixel
+
+    gifcc in.gif out.gif \
+      --source-palette "#000000,#808080,#FFFFFF" \
+      --target-palette "#1D3557,#E63946,transparent" \
+      --cleanup 2
+
+- --source-palette A,B,...   Hex colors. Each pixel snaps to the nearest one.
+- --target-palette A,B,...   Same length as the source palette, matched by position. Entries may be "transparent".
+- --distance rgb|weighted-rgb   Default rgb. weighted-rgb weights channels by perceived luminance.
+- --cleanup N   Default 0. Edge-cleanup passes that absorb stray pixels and antialiasing bands into the region around them. 1-2 is typical.
+
+### Rules
+
+- --map can't be combined with the palette flags.
+- --tolerance and --softness are for map mode only. --distance and --cleanup are for palette mode only.
+- Only the target side may be transparent. Sources must be 6-digit hex colors.
+- Invalid arguments exit with status 2 and print "gifcc: error: ..." to stderr.
+
+## Output
+
+One line per mapping (map mode) or palette entry (palette mode), then the saved path:
+
+    Processing frame(s)...
+    (255, 255, 255) -> (255, 0, 0): changed 1234 pixel(s)
+    Saved: out.gif
+
+"changed 0 pixel(s)" means that source color isn't present at the current tolerance. Find the real colors first:
+
+    uvx --with pillow python -c 'import sys; from PIL import Image; im = Image.open(sys.argv[1]).convert("RGBA"); [print(f"#{r:02X}{g:02X}{b:02X} {n}") for n, (r, g, b, a) in sorted(im.getcolors(im.width * im.height), reverse=True)[:12] if a]' in.gif

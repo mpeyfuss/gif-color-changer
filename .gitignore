@@ -9,3 +9,8 @@ wheels/
 # Virtual environments
 .venv
 .DS_Store
+
+# Site
+site/node_modules/
+site/dist/
+site/public/SKILL.md

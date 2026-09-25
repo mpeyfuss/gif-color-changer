@@ -1,4 +1,4 @@
-.PHONY: hooks lint check test test-all test-3.11 test-3.12 test-3.13 test-3.14
+.PHONY: hooks lint check test test-all test-3.11 test-3.12 test-3.13 test-3.14 site site-build
 
 hooks:
 	uv run pre-commit install
@@ -24,3 +24,10 @@ test-3.13:
 
 test-3.14:
 	uv run --python 3.14 pytest
+
+# Browser playground (GitHub Pages). Needs bun.
+site:
+	cd site && bun install && bun run dev
+
+site-build:
+	cd site && bun install && bun test && bun run build && bun run preview

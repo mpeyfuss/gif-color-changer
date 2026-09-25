@@ -7,6 +7,7 @@ Usage:
 """
 
 import argparse
+from collections.abc import Sequence
 
 from PIL import Image
 
@@ -24,7 +25,7 @@ DEFAULT_TOLERANCE = 50
 DEFAULT_SOFTNESS = 25
 
 
-def main():
+def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", help="Path to input GIF")
     parser.add_argument("output", help="Path to output GIF")
@@ -80,7 +81,7 @@ def main():
             f"replacing them. Default: {DEFAULT_SOFTNESS}"
         ),
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     palette_mode = args.source_palette is not None or args.target_palette is not None
     tolerance_mode = args.color_mappings is not None

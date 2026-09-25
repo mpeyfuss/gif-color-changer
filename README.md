@@ -2,10 +2,27 @@
 
 Command line tool for replacing colors across every frame of a GIF.
 
+**[Try it in your browser →](https://mpeyfuss.github.io/gif-color-changer/)** It runs the real CLI on [Pyodide](https://pyodide.org), so nothing is uploaded.
+
+> [!NOTE]
+> This works best on simple GIFs with flat colors, like logos, icons, pixel art and flat illustrations. Complex GIFs (photos, gradients, heavy dithering, many similar shades) may not work as well. Matching is by color, not position, so it's especially hard to target one specific area: every pixel that matches changes, wherever it is in the frame.
+
 ## Install
 
 ```bash
 uv tool install gif-color-changer
+```
+
+Or with pipx:
+
+```bash
+pipx install gif-color-changer
+```
+
+Or run it once without installing:
+
+```bash
+uvx --from gif-color-changer gifcc input.gif output.gif --map "#FFFFFF=#FF0000"
 ```
 
 From a local checkout:
@@ -152,6 +169,17 @@ In palette mode, it prints how many pixels were assigned to each source palette 
 
 If a mapping says it changed `0` pixels, the source color probably does not exist in the GIF at that tolerance.
 
+## Use with AI agents
+
+- **Any agent:** point it at [`llms.txt`](https://mpeyfuss.github.io/gif-color-changer/llms.txt). It covers install steps, every flag and worked examples.
+- **Claude Code:** install the skill in [`skills/gifcc/SKILL.md`](skills/gifcc/SKILL.md) and Claude will handle GIF recoloring requests on its own:
+
+  ```bash
+  mkdir -p ~/.claude/skills/gifcc && curl -fsSL \
+    https://mpeyfuss.github.io/gif-color-changer/SKILL.md \
+    -o ~/.claude/skills/gifcc/SKILL.md
+  ```
+
 ## Uninstall
 
 ```bash
@@ -203,11 +231,13 @@ uv run gifcc input.gif output.gif \
   --map "#FFFFFF=#FF0000"
 ```
 
-You can also run the compatibility wrapper directly:
+### Browser playground
+
+The playground in `site/` is a Vite + TypeScript app, managed with [Bun](https://bun.sh). On page load it installs the latest `gif-color-changer` release from PyPI into Pyodide inside a Web Worker, so publishing a new version updates the playground without a redeploy. Pushes to `main` that touch `site/` or `skills/` deploy it to GitHub Pages via `.github/workflows/pages.yml`.
 
 ```bash
-uv run python main.py input.gif output.gif \
-  --map "#FFFFFF=#FF0000"
+make site        # dev server at http://localhost:5173/gif-color-changer/
+make site-build  # test, build and preview the production bundle
 ```
 
 ## Build
