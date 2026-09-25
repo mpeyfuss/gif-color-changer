@@ -247,3 +247,22 @@ uv build
 ```
 
 That writes the package artifacts to `dist/`.
+
+## Releasing
+
+Publishing a GitHub Release uploads the package to PyPI via
+`.github/workflows/release.yml` (PyPI Trusted Publishing, no API token).
+
+1. Bump the version and push it to `main`:
+
+   ```bash
+   uv version --bump patch   # or minor / major
+   git commit -am "bump version to $(uv version --short)"
+   git push
+   ```
+
+2. On GitHub, draft a new Release with a tag `v<version>` that matches
+   `pyproject.toml` (e.g. `v0.5.1`) and publish it.
+
+3. CI runs the tests, checks the tag matches the version, builds, publishes to
+   PyPI and attaches the wheel and sdist to the Release.
