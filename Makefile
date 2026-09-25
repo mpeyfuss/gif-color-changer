@@ -1,18 +1,25 @@
-.PHONY: test test-all test-3.11 test-3.12 test-3.13 test-3.14
+.PHONY: test lint fmt build wasm web web-dev
 
 test:
-	uv run pytest
+	cargo test --workspace
 
-test-all: test-3.11 test-3.12 test-3.13 test-3.14
+lint:
+	cargo fmt --all --check
+	cargo clippy --workspace --all-targets -- -D warnings
 
-test-3.11:
-	uv run --python 3.11 pytest
+fmt:
+	cargo fmt --all
 
-test-3.12:
-	uv run --python 3.12 pytest
+build:
+	cargo build --release -p gif-color-changer
 
-test-3.13:
-	uv run --python 3.13 pytest
+# Requires: rustup target add wasm32-unknown-unknown
+#           cargo install wasm-bindgen-cli --version <wasm-bindgen version in Cargo.lock>
+wasm:
+	cd web && bun run wasm
 
-test-3.14:
-	uv run --python 3.14 pytest
+web: wasm
+	cd web && bun install --frozen-lockfile && bun run build
+
+web-dev: wasm
+	cd web && bun install && bun run dev

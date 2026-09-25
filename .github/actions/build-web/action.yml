@@ -1,0 +1,33 @@
+name: Build web app
+description: Build the WebAssembly core and the Vite site into web/dist.
+
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+
+    - uses: Swatinem/rust-cache@v2
+
+    # wasm-bindgen-cli must match the wasm-bindgen crate version exactly.
+    - name: Read wasm-bindgen version
+      id: wasm-bindgen
+      shell: bash
+      run: |
+        version=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
+    - uses: taiki-e/install-action@v2
+      with:
+        tool: wasm-bindgen@${{ steps.wasm-bindgen.outputs.version }}
+
+    - uses: oven-sh/setup-bun@v2
+
+    - name: Build
+      shell: bash
+      working-directory: web
+      run: |
+        bun install --frozen-lockfile
+        bun run wasm
+        bun run build

@@ -1,18 +1,38 @@
 # GIF Color Changer
 
-Command line tool for replacing colors across every frame of a GIF.
+Replace colors across every frame of a GIF, from the command line or in your browser.
 
 ## Install
 
+### Web app
+
+**https://mpeyfuss.github.io/gif-color-changer/**
+
+Everything runs locally in your browser via WebAssembly. Your GIF is never uploaded anywhere. Click the original preview to pick a source color from it.
+
+### Command line
+
+Prebuilt binaries for macOS, Linux, and Windows are attached to each [GitHub release](https://github.com/mpeyfuss/gif-color-changer/releases).
+
+macOS / Linux:
+
 ```bash
-uv tool install gif-color-changer
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/mpeyfuss/gif-color-changer/releases/latest/download/gif-color-changer-installer.sh | sh
 ```
 
-From a local checkout:
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/mpeyfuss/gif-color-changer/releases/latest/download/gif-color-changer-installer.ps1 | iex"
+```
+
+From source (requires Rust):
 
 ```bash
-uv tool install .
+cargo install --git https://github.com/mpeyfuss/gif-color-changer gif-color-changer
 ```
+
+> The Python package on PyPI (`uv tool install gif-color-changer`) is deprecated as of 1.0.0 and will not receive updates. Remove it with `uv tool uninstall gif-color-changer`.
 
 ## Usage
 
@@ -56,6 +76,8 @@ gifcc input.gif output.gif \
 This knocks out a solid color, for example to drop a flat background. Matching is still RGB-only and respects `--tolerance`; only the right-hand side may be transparent. With `--softness`, pixels near the edge of the tolerance range fade out gradually (their alpha drops proportionally) instead of being cut out abruptly.
 
 `transparent` also works as a target in palette mode (see below).
+
+GIF transparency is all-or-nothing, so when the output is saved, pixels that are less than 50% opaque become fully transparent and the rest become fully opaque. A `--softness` fade toward `transparent` therefore ends in a hard edge halfway through the softness band.
 
 ## Tolerance
 
@@ -152,58 +174,50 @@ In palette mode, it prints how many pixels were assigned to each source palette 
 
 If a mapping says it changed `0` pixels, the source color probably does not exist in the GIF at that tolerance.
 
-## Uninstall
-
-```bash
-uv tool uninstall gif-color-changer
-```
-
 ## Development
 
-Set up the repo:
+The project is a Rust workspace:
 
-```bash
-uv sync
-```
+- `crates/gifcc-core`: color matching, palette rewrite, edge cleanup, and GIF decoding/encoding
+- `crates/gifcc-cli`: the `gifcc` binary (package `gif-color-changer`)
+- `crates/gifcc-wasm`: WebAssembly bindings used by the web app
+- `web/`: the Vite + TypeScript web app (uses [Bun](https://bun.sh))
 
-Run tests:
-
-```bash
-uv run pytest
-```
-
-Run tests against a specific Python version:
-
-```bash
-uv run --python 3.11 pytest
-```
-
-Or use the Makefile:
+Run the tests and lints:
 
 ```bash
 make test
-make test-all
-make test-3.11
+make lint
 ```
 
-Run the command without installing it as a tool:
+Run the CLI without installing it:
 
 ```bash
-uv run gifcc input.gif output.gif \
-  --map "#FFFFFF=#FF0000"
+cargo run -p gif-color-changer -- input.gif output.gif --map "#FFFFFF=#FF0000"
 ```
 
-You can also run the compatibility wrapper directly:
+`crates/gifcc-core/tests/fixtures` holds golden output captured from the original Python implementation. `cargo test` checks that the Rust port reproduces it byte for byte.
+
+### Web app
+
+One-time setup:
 
 ```bash
-uv run python main.py input.gif output.gif \
-  --map "#FFFFFF=#FF0000"
+rustup target add wasm32-unknown-unknown
+# Must match the wasm-bindgen version in Cargo.lock
+cargo install wasm-bindgen-cli --version 0.2.128 --locked
 ```
 
-## Build
+Then:
 
 ```bash
-uv build
+make web-dev   # build the WebAssembly module and start the Vite dev server
+make web       # production build into web/dist
 ```
 
-That writes the package artifacts to `dist/`.
+## Releasing
+
+1. Bump `version` under `[workspace.package]` in `Cargo.toml`.
+2. Tag the commit (`git tag v1.0.0`) and push the tag. The release workflow builds binaries and installers for every platform and publishes a GitHub release.
+
+Every push to `main` deploys the web app to GitHub Pages. In the repository settings, set Pages → Source to "GitHub Actions" once.

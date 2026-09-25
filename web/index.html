@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Replace colors across every frame of a GIF, right in your browser."
+    />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <title>GIF Color Changer</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div>
+        <h1>GIF Color Changer</h1>
+        <p class="tagline">
+          Replace colors across every frame of a GIF. Runs entirely in your browser; your
+          file never leaves your device.
+        </p>
+      </div>
+      <a class="repo-link" href="https://github.com/mpeyfuss/gif-color-changer">GitHub</a>
+    </header>
+
+    <main class="layout">
+      <section class="panel controls" aria-label="Settings">
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="file-input" accept="image/gif" hidden />
+          <span class="dropzone-title" id="dropzone-title">Drop a GIF here or click to choose</span>
+          <span class="dropzone-detail" id="dropzone-detail">Nothing is uploaded anywhere</span>
+        </label>
+
+        <div class="tabs" role="tablist">
+          <button role="tab" id="tab-map" aria-selected="true" aria-controls="panel-map">
+            Replace colors
+          </button>
+          <button role="tab" id="tab-palette" aria-selected="false" aria-controls="panel-palette">
+            Palette rewrite
+          </button>
+        </div>
+
+        <div id="panel-map" role="tabpanel" aria-labelledby="tab-map">
+          <p class="hint">
+            Each source color within the tolerance is replaced. Mappings run in order and a pixel
+            only changes once.
+          </p>
+          <div class="rows" id="map-rows"></div>
+          <button class="add-row" id="add-map-row" type="button">+ Add mapping</button>
+
+          <div class="field">
+            <label for="tolerance">Tolerance <output id="tolerance-value">50</output></label>
+            <input type="range" id="tolerance" min="0" max="255" value="50" />
+          </div>
+          <div class="field">
+            <label for="softness">Softness <output id="softness-value">25</output></label>
+            <input type="range" id="softness" min="0" max="255" value="25" />
+          </div>
+        </div>
+
+        <div id="panel-palette" role="tabpanel" aria-labelledby="tab-palette" hidden>
+          <p class="hint">
+            Every pixel snaps to its nearest source color and becomes the target color in the
+            same row.
+          </p>
+          <div class="rows" id="palette-rows"></div>
+          <button class="add-row" id="add-palette-row" type="button">+ Add color</button>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="distance">Distance</label>
+              <select id="distance">
+                <option value="rgb">RGB</option>
+                <option value="weighted-rgb">Weighted RGB</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="cleanup">Edge cleanup passes</label>
+              <input type="number" id="cleanup" min="0" max="20" value="0" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel previews" aria-label="Preview">
+        <figure class="preview">
+          <figcaption>
+            Original
+            <span class="caption-hint" id="pick-hint" hidden>Click to pick a source color</span>
+          </figcaption>
+          <div class="canvas-frame" id="original-frame">
+            <img id="original" alt="Original GIF" hidden />
+            <span class="empty" id="original-empty">No GIF loaded</span>
+          </div>
+        </figure>
+        <figure class="preview">
+          <figcaption>
+            Result
+            <span class="caption-hint" id="status" role="status"></span>
+          </figcaption>
+          <div class="canvas-frame">
+            <img id="result" alt="Recolored GIF" hidden />
+            <span class="empty" id="result-empty">The result appears here</span>
+          </div>
+        </figure>
+        <p class="error" id="error" role="alert" hidden></p>
+        <div class="result-footer">
+          <ul class="summary" id="summary"></ul>
+          <a class="button" id="download" download hidden>Download GIF</a>
+        </div>
+      </section>
+    </main>
+
+    <template id="row-template">
+      <div class="row">
+        <span class="row-part">
+          <input type="color" class="swatch source-color" aria-label="Source color" />
+          <input type="text" class="hex source-hex" aria-label="Source hex" spellcheck="false" />
+        </span>
+        <span class="arrow" aria-hidden="true">→</span>
+        <span class="row-part">
+          <input type="color" class="swatch target-color" aria-label="Target color" />
+          <input type="text" class="hex target-hex" aria-label="Target hex" spellcheck="false" />
+        </span>
+        <label class="transparent-toggle" title="Make matching pixels transparent">
+          <input type="checkbox" class="transparent" /> Clear
+        </label>
+        <button type="button" class="remove" aria-label="Remove row">×</button>
+      </div>
+    </template>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

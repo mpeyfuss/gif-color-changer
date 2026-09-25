@@ -1,0 +1,23 @@
+[workspace]
+resolver = "3"
+members = ["crates/gifcc-core", "crates/gifcc-cli", "crates/gifcc-wasm"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+repository = "https://github.com/mpeyfuss/gif-color-changer"
+authors = ["Marco Peyfuss"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+[profile.release.package.gifcc-wasm]
+opt-level = "s"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

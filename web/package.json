@@ -1,0 +1,16 @@
+{
+  "name": "gif-color-changer-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "wasm": "cargo build --release --target wasm32-unknown-unknown -p gifcc-wasm && wasm-bindgen --target web --out-dir src/wasm ../target/wasm32-unknown-unknown/release/gifcc_wasm.wasm",
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1"
+  }
+}
